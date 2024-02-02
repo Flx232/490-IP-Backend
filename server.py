@@ -1,7 +1,6 @@
-from flask import Flask
+from flask import Flask, request
 from flask_mysqldb import MySQL
 from flask_cors import CORS
-import pandas as pd
 from json import loads, dumps
 
 port = 8000
@@ -89,26 +88,33 @@ def get_actor_info(actorId):
     cursor.close()
     return parsed
 
-@app.get("/movie/title/<filter>")
-def get_movie_by_title(filter):
+@app.get("/movie/info")
+def get_movie_by_title():
+    url_params = request.args
+    title = url_params.get('title', '')
+    actor = url_params.get('actor', '')
+    genre = url_params.get('genre', '')
     cursor = mysql.connection.cursor()
-    query = f'SELECT film_id, title, rating, description FROM film WHERE title LIKE \'{filter.upper()}%\''
-    cursor.execute(query)
-    result = list(cursor.fetchall())
-    column_names = tuple([i[0] for i in cursor.description])
-    result.insert(0, column_names)
-    res = dumps(result)
-    parsed = loads(res)
-    cursor.close()
-    return parsed
-
-@app.get("/movie/actor/<filter>")
-def get_movie_by_actor(filter):
-    cursor = mysql.connection.cursor()
+    first, last ='',''
+    if(' ' in actor):
+        if(actor[0] == ' '):
+            last = actor[1:]
+        elif(actor[-1] == ' '):
+            first = actor[:-1]
+        else:
+            fractured_name=actor.split()
+            first = fractured_name[0]
+            last = fractured_name[1]
+    else:
+        first = actor
     query = f'SELECT DISTINCT f.film_id, title, rating, description\
         FROM film AS f JOIN film_actor AS fa ON f.film_id = fa.film_id\
         JOIN actor AS a ON fa.actor_id = a.actor_id\
-        WHERE first_name LIKE \'{filter}%\' OR last_name LIKE \'{filter}%\''
+        JOIN film_category as fc ON f.film_id = fc.film_id\
+        JOIN category AS c on fc.category_id = c.category_id\
+        WHERE title LIKE \'{title}%\'\
+        AND first_name LIKE \'{first}%\' AND last_name LIKE \'{last}%\'\
+        AND name LIKE \'{genre}%\''
     cursor.execute(query)
     result = list(cursor.fetchall())
     column_names = tuple([i[0] for i in cursor.description])
@@ -118,18 +124,48 @@ def get_movie_by_actor(filter):
     cursor.close()
     return parsed
 
-@app.get("/movie/genre/<filter>")
-def get_movie_by_genre(filter):
+@app.get("/customers/info")
+def get_customer_id():
     cursor = mysql.connection.cursor()
-    query = f'SELECT DISTINCT f.film_id, title, rating, description\
-        FROM film AS f JOIN film_category as fc ON f.film_id = fc.film_id\
-        JOIN category AS c on fc.category_id = c.category_id\
-        WHERE name LIKE \'{filter}%\''
+    url_params = request.args
+    id = int(url_params.get('id'))
+    first = url_params.get('first', '')
+    last = url_params.get('last', '')
+    if(id == 0):
+        query = f'SELECT customer_id, first_name, last_name FROM customer\
+        WHERE first_name LIKE \'{first}%\' AND last_name LIKE \'{last}%\''
+    else:
+        query = f'SELECT customer_id, first_name, last_name\
+        FROM customer WHERE customer_id={int(id)}'
+    print(query)
     cursor.execute(query)
     result = list(cursor.fetchall())
-    column_names = tuple([i[0] for i in cursor.description])
-    result.insert(0, column_names)
     res = dumps(result)
+    parsed = loads(res)
+    cursor.close()
+    return parsed
+
+@app.get("/customer/<id>")
+def get_customer_id_info(id):
+    cursor = mysql.connection.cursor()
+    query = f'SELECT first_name, last_name, email, address_id, active FROM customer WHERE customer_id={int(id)}'
+    cursor.execute(query)
+    result = list(cursor.fetchall())
+    res = dumps(result)
+    parsed = loads(res)
+    cursor.close()
+    return parsed
+
+@app.get("/rental/<id>")
+def get_customer_rental_info(id):
+    cursor = mysql.connection.cursor()
+    query = f'SELECT title, rental_date, return_date\
+        FROM rental AS r JOIN inventory AS i ON r.inventory_id=i.inventory_id\
+        JOIN film AS f ON i.film_id=f.film_id\
+        WHERE customer_id = {int(id)};'
+    cursor.execute(query)
+    result = list(cursor.fetchall())
+    res = dumps(result, default=str)
     parsed = loads(res)
     cursor.close()
     return parsed
