@@ -30,8 +30,6 @@ def get_top_5_movies(type):
 
     cursor.execute(query)
     result = list(cursor.fetchall())
-    column_names = tuple([i[0] for i in cursor.description])
-    result.insert(0, column_names)
     res = dumps(result)
     parsed = loads(res)
     cursor.close()
@@ -47,8 +45,6 @@ def get_movie_w_rent_info(movieId):
         GROUP BY i.film_id, fc.category_id HAVING i.film_id = {movieId}'    
     cursor.execute(query)
     result = list(cursor.fetchall())
-    column_names = tuple([i[0] for i in cursor.description])
-    result.insert(0, column_names)
     res = dumps(result)
     parsed = loads(res)
     cursor.close()
@@ -64,8 +60,6 @@ def get_movie_info(movieId):
         GROUP BY f.film_id, fc.category_id HAVING f.film_id = {movieId}'    
     cursor.execute(query)
     result = list(cursor.fetchall())
-    column_names = tuple([i[0] for i in cursor.description])
-    result.insert(0, column_names)
     res = dumps(result)
     parsed = loads(res)
     cursor.close()
@@ -74,15 +68,13 @@ def get_movie_info(movieId):
 @app.get("/actor/<actorId>")
 def get_actor_info(actorId):
     cursor = mysql.connection.cursor()
-    query = f'SELECT f.film_id, f.title, COUNT(i.film_id) AS rental_count\
+    query = f'SELECT f.title, COUNT(i.film_id) AS rental_count\
         FROM inventory AS i, rental AS r, film AS f, film_actor AS fa, actor AS a\
         WHERE i.inventory_id = r.inventory_id AND i.film_id = f.film_id AND i.film_id = fa.film_id AND fa.actor_id = {actorId}\
         GROUP BY i.film_id, fa.actor_id\
         ORDER BY COUNT(i.film_id) DESC LIMIT 5'
     cursor.execute(query)
     result = list(cursor.fetchall())
-    column_names = tuple([i[0] for i in cursor.description])
-    result.insert(0, column_names)
     res = dumps(result)
     parsed = loads(res)
     cursor.close()
@@ -117,8 +109,6 @@ def get_movie_by_title():
         AND name LIKE \'{genre}%\''
     cursor.execute(query)
     result = list(cursor.fetchall())
-    column_names = tuple([i[0] for i in cursor.description])
-    result.insert(0, column_names)
     res = dumps(result)
     parsed = loads(res)
     cursor.close()
@@ -132,10 +122,10 @@ def get_customer_id():
     first = url_params.get('first', '')
     last = url_params.get('last', '')
     if(id == 0):
-        query = f'SELECT customer_id, first_name, last_name FROM customer\
+        query = f'SELECT customer_id, first_name, last_name, email FROM customer\
         WHERE first_name LIKE \'{first}%\' AND last_name LIKE \'{last}%\''
     else:
-        query = f'SELECT customer_id, first_name, last_name\
+        query = f'SELECT customer_id, first_name, last_name, email\
         FROM customer WHERE customer_id={int(id)}'
     print(query)
     cursor.execute(query)
