@@ -69,9 +69,9 @@ def get_movie_info(movieId):
 def get_actor_info(actorId):
     cursor = mysql.connection.cursor()
     query = f'SELECT f.title, COUNT(i.film_id) AS rental_count\
-        FROM inventory AS i, rental AS r, film AS f, film_actor AS fa, actor AS a\
+        FROM inventory AS i, rental AS r, film AS f, film_actor AS fa\
         WHERE i.inventory_id = r.inventory_id AND i.film_id = f.film_id AND i.film_id = fa.film_id AND fa.actor_id = {actorId}\
-        GROUP BY i.film_id, fa.actor_id\
+        GROUP BY i.film_id\
         ORDER BY COUNT(i.film_id) DESC LIMIT 5'
     cursor.execute(query)
     result = list(cursor.fetchall())
