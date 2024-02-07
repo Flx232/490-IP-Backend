@@ -122,23 +122,13 @@ def get_customer_id():
     first = url_params.get('first', '')
     last = url_params.get('last', '')
     if(id == 0):
-        query = f'SELECT customer_id, first_name, last_name, email FROM customer\
+        query = f'SELECT customer_id, first_name, last_name, email, address, active\
+        FROM customer AS c JOIN address AS a ON c.address_id=a.address_id\
         WHERE first_name LIKE \'{first}%\' AND last_name LIKE \'{last}%\''
     else:
-        query = f'SELECT customer_id, first_name, last_name, email\
-        FROM customer WHERE customer_id={int(id)}'
+        query = f'SELECT customer_id, first_name, last_name, email, address, active\
+        FROM customer AS c JOIN address AS a ON c.address_id=a.address_id WHERE customer_id={int(id)}'
     print(query)
-    cursor.execute(query)
-    result = list(cursor.fetchall())
-    res = dumps(result)
-    parsed = loads(res)
-    cursor.close()
-    return parsed
-
-@app.get("/customer/<id>")
-def get_customer_id_info(id):
-    cursor = mysql.connection.cursor()
-    query = f'SELECT first_name, last_name, email, address_id, active FROM customer WHERE customer_id={int(id)}'
     cursor.execute(query)
     result = list(cursor.fetchall())
     res = dumps(result)
