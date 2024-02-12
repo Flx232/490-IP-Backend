@@ -139,12 +139,15 @@ def get_customer_id():
 @app.get("/rental/<id>")
 def get_customer_rental_info(id):
     cursor = mysql.connection.cursor()
-    query = f'SELECT title, rental_date, return_date\
-        FROM rental AS r JOIN inventory AS i ON r.inventory_id=i.inventory_id\
-        JOIN film AS f ON i.film_id=f.film_id\
-        WHERE customer_id = {int(id)};'
+    query = f'SELECT COUNT(r.inventory_id) as DVDs\
+        FROM customer AS c, rental AS r WHERE c.customer_id = r.customer_id AND c.customer_id = {int(id)}'
     cursor.execute(query)
     result = list(cursor.fetchall())
+    # res = dumps(result, default=str)
+    # parsed = loads(res)
+    query = f'SELECT c.customer_id, c.first_name, c.last_name, COUNT(r.inventory_id) as DVDs\
+        FROM customer AS c, rental AS r WHERE c.customer_id = r.customer_id AND c.customer_id = {int(id)} AND r.return_date IS NULL'
+    result.append(list(cursor.fetchall()))
     res = dumps(result, default=str)
     parsed = loads(res)
     cursor.close()
