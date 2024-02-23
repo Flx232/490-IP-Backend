@@ -2,6 +2,9 @@ from flask import Flask, request
 from flask_mysqldb import MySQL
 from flask_cors import CORS
 from json import loads, dumps
+from datetime import datetime
+import random
+import math
 
 port = 8000
 app = Flask(__name__)
@@ -34,7 +37,7 @@ def get_top_5_movies(type):
     parsed = loads(res)
     cursor.close()
     return parsed
-# 
+
 @app.get("/movie/rented/<movieId>")
 def get_movie_w_rent_info(movieId):
     cursor = mysql.connection.cursor()
@@ -47,6 +50,21 @@ def get_movie_w_rent_info(movieId):
     result = list(cursor.fetchall())
     res = dumps(result)
     parsed = loads(res)
+    cursor.close()
+    return parsed
+
+@app.get("/movie/total/<movieId>")
+def get_movie_rental_total(movieId):
+    cursor=mysql.connection.cursor()
+    query = f'SELECT COUNT(DISTINCT r.inventory_id)\
+        FROM inventory AS i, rental AS r WHERE i.inventory_id=r.inventory_id\
+        AND film_id={movieId} AND r.inventory_id NOT IN (SELECT DISTINCT r.inventory_id\
+        FROM inventory AS i JOIN rental AS r WHERE i.inventory_id=r.inventory_id\
+        AND film_id={movieId} AND return_date IS NULL)'
+    cursor.execute(query)
+    result = list(cursor.fetchall())
+    res=dumps(result)
+    parsed=loads(res)
     cursor.close()
     return parsed
 
@@ -122,7 +140,7 @@ def get_customer_id():
     first = url_params.get('first', '')
     last = url_params.get('last', '')
     if(id == 0):
-        query = f'SELECT customer_id, first_name, last_name, email, address, active\
+        query = f'SELECT customer_id, first_name, last_name, email, address, active, store_id\
         FROM customer AS c JOIN address AS a ON c.address_id=a.address_id\
         WHERE first_name LIKE \'{first}%\' AND last_name LIKE \'{last}%\''
     else:
@@ -145,13 +163,127 @@ def get_customer_rental_info(id):
     result = list(cursor.fetchall())
     # res = dumps(result, default=str)
     # parsed = loads(res)
-    query = f'SELECT c.customer_id, c.first_name, c.last_name, COUNT(r.inventory_id) as DVDs\
+    query = f'SELECT COUNT(r.inventory_id) as DVDs\
         FROM customer AS c, rental AS r WHERE c.customer_id = r.customer_id AND c.customer_id = {int(id)} AND r.return_date IS NULL'
-    result.append(list(cursor.fetchall()))
-    res = dumps(result, default=str)
-    parsed = loads(res)
+    cursor.execute(query)
+    result2 = cursor.fetchall()
+    res = [[result[0][0], 0 if len(result2) == 0 else result2[0][0]]]
+    res1 = dumps(res, default=str)
+    parsed = loads(res1)
     cursor.close()
     return parsed
+
+@app.post("/customer/add")
+def handle_add_form():
+    cursor = mysql.connection.cursor()
+    seed = 0
+    random.seed(seed)
+    id = int(random.random()*math.pow(2,16))
+    while True:
+        query = f'SELECT customer_id FROM customer WHERE customer_id={id}'
+        cursor.execute(query)
+        result = cursor.fetchall()
+        if len(result) == 0:
+            break
+        seed += 1
+        random.seed(seed)
+        id = int(random.random()*math.pow(2,16))
+    time = datetime.now()
+    data = request.json
+    first_name, last_name = data.get("first_name").upper(), data.get("last_name").upper()
+    email = data.get("email")
+    store_id = data.get("store")
+    address_id = 0
+    if len(data.get("address")) > 0:
+        query = f'SELECT address_id FROM address WHERE address LIKE \'{data.get("address")}\''
+        cursor.execute(query)
+        result = cursor.fetchall()
+        if len(result) == 0:
+            return "Invalid Address"
+        address_id = result[0][0]
+    query = f'INSERT INTO customer\
+        (customer_id, store_id, first_name, last_name, email, address_id, active, create_date, last_update)\
+        VALUES ({id}, {store_id}, \'{first_name}\', \'{last_name}\', \'{email}\', {address_id}, 1, \'{time}\', \'{time}\')'
+    cursor.execute(query)
+    cursor.execute('COMMIT')
+    cursor.close()
+    return data
+
+@app.post("/movie/rent")
+def handle_movie_rent():
+    cursor = mysql.connection.cursor()
+    seed = 0
+    random.seed(seed)
+    id = int(random.random()*math.pow(2,16))
+    while True:
+        query = f'SELECT rental_id FROM rental WHERE rental_id={id}'
+        cursor.execute(query)
+        result = cursor.fetchall()
+        if len(result) == 0:
+            break
+        seed += 1
+        random.seed(seed)
+        id = int(random.random()*math.pow(2,16))
+    time = datetime.now()
+    data = request.json
+    customer_id=data.get("customer_id")
+    film_id=data.get("film_id")
+    staff_id=data.get("staff_id")
+    query = f'SELECT DISTINCT r.inventory_id FROM inventory AS i, rental AS r\
+        WHERE i.inventory_id=r.inventory_id AND film_id={film_id} AND r.inventory_id\
+        NOT IN (SELECT DISTINCT r.inventory_id FROM inventory AS i JOIN rental AS r\
+        WHERE i.inventory_id=r.inventory_id AND film_id={film_id} AND return_date IS NULL) LIMIT 1'
+    cursor.execute(query)
+    result = cursor.fetchall()
+    inventory_id = result[0][0]
+    query = f'INSERT INTO rental\
+        (rental_id, rental_date, inventory_id, customer_id, staff_id, last_update)\
+        VALUES ({id}, \'{time}\', \'{inventory_id}\', \'{customer_id}\', {staff_id}, \'{time}\')'
+    cursor.execute(query)
+    cursor.execute('COMMIT')
+    cursor.close()
+    return data
+
+@app.patch("/customer/edit")
+def handle_edit_form():
+    cursor = mysql.connection.cursor()
+    time = datetime.now()
+    data = request.json
+    address_str= ''
+    store_id = f'store_id={data.get("store")}'
+    activity = f'active={data.get("active")}'
+    first_name = '' if data.get("first_name") == None else data.get("first_name")
+    last_name = '' if data.get("last_name") == None else data.get("last_name")
+    email = '' if data.get("email") == None else data.get("email")
+
+    first_name_str = f', first_name=\'{first_name.upper()}\'' if (len(first_name) > 0) else ''
+    last_name_str = f', last_name=\'{last_name.upper()}\'' if(len(last_name) > 0) else ''
+    email_str = f', email=\'{email}\'' if len(email) > 0 else ''
+
+    if len('' if data.get("address") == None else data.get("address")) > 0:
+        query = f'SELECT address_id FROM address WHERE address LIKE \'{data.get("address")}\''
+        cursor.execute(query)
+        result = cursor.fetchall()
+        if len(result) == 0:
+            return "Invalid Address"
+        address_str = f', address_id={result[0][0]}'
+
+    query = f'UPDATE customer\
+        SET last_update=\'{time}\', {store_id}, {activity}{first_name_str}{last_name_str}{email_str}{address_str}\
+        WHERE customer_id={data.get("id")}'
+    cursor.execute(query)
+    cursor.execute('COMMIT')
+    cursor.close()
+    return data
+
+@app.delete("/customer/remove/<id>")
+def handle_remove_customer(id):
+    cursor = mysql.connection.cursor()
+    query = f'DELETE FROM customer WHERE customer_id={id}'
+    cursor.execute(query)
+    cursor.execute('COMMIT')
+    cursor.close()
+    return id
 
 if __name__ == '__main__':
     app.run(debug=True, port=8000)
