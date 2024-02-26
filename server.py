@@ -140,13 +140,17 @@ def get_customer_id():
     first = url_params.get('first', '')
     last = url_params.get('last', '')
     if(id == 0):
-        query = f'SELECT customer_id, first_name, last_name, email, address, active, store_id\
-        FROM customer AS c JOIN address AS a ON c.address_id=a.address_id\
+        query = f'SELECT customer_id, first_name, last_name, email, address,\
+        active, store_id, phone, country, city, district, postal_code\
+        FROM customer AS c JOIN address AS a ON c.address_id=a.address_id JOIN\
+        city AS ci ON a.city_id = ci.city_id JOIN country as co ON ci.country_id = co.country_id\
         WHERE first_name LIKE \'{first}%\' AND last_name LIKE \'{last}%\''
     else:
-        query = f'SELECT customer_id, first_name, last_name, email, address, active\
-        FROM customer AS c JOIN address AS a ON c.address_id=a.address_id WHERE customer_id={int(id)}'
-    print(query)
+        query = f'SELECT customer_id, first_name, last_name, email, address,\
+        active, store_id, phone, country, city, district, postal_code\
+        FROM customer AS c JOIN address AS a ON c.address_id=a.address_id JOIN\
+        city AS ci ON a.city_id = ci.city_id JOIN country as co ON ci.country_id = co.country_id\
+        WHERE customer_id={int(id)}'
     cursor.execute(query)
     result = list(cursor.fetchall())
     res = dumps(result)
@@ -157,19 +161,50 @@ def get_customer_id():
 @app.get("/rental/<id>")
 def get_customer_rental_info(id):
     cursor = mysql.connection.cursor()
-    query = f'SELECT COUNT(r.inventory_id) as DVDs\
-        FROM customer AS c, rental AS r WHERE c.customer_id = r.customer_id AND c.customer_id = {int(id)}'
+    query = f'SELECT COUNT(inventory_id) as DVDs\
+        FROM rental WHERE customer_id = {int(id)}'
     cursor.execute(query)
     result = list(cursor.fetchall())
     # res = dumps(result, default=str)
     # parsed = loads(res)
-    query = f'SELECT COUNT(r.inventory_id) as DVDs\
-        FROM customer AS c, rental AS r WHERE c.customer_id = r.customer_id AND c.customer_id = {int(id)} AND r.return_date IS NULL'
+    query = f'SELECT COUNT(inventory_id) as DVDs\
+        FROM rental WHERE customer_id = {int(id)} AND return_date IS NULL'
     cursor.execute(query)
     result2 = cursor.fetchall()
     res = [[result[0][0], 0 if len(result2) == 0 else result2[0][0]]]
     res1 = dumps(res, default=str)
     parsed = loads(res1)
+    cursor.close()
+    return parsed
+
+@app.get("/rentals/movie/<id>")
+def get_customer_movie_rent_list(id):
+    cursor = mysql.connection.cursor()
+    query = f'SELECT r.customer_id, first_name, last_name, email\
+        FROM rental AS r, customer AS c, inventory as i WHERE i.inventory_id = r.inventory_id\
+        AND c.customer_id = r.customer_id AND i.film_id = {id} AND return_date IS NULL'
+    cursor.execute(query)
+    result = list(cursor.fetchall())
+    res = dumps(result, default=str)
+    parsed = loads(res)
+    cursor.close()
+    return parsed
+
+@app.get("/customer/rent_hist/<id>")
+def get_rent_hist(id):
+    cursor = mysql.connection.cursor()
+    query = f'SELECT DISTINCT f.film_id, title, rating, description, rental_date, return_date FROM inventory AS i,\
+    rental AS r, film as f WHERE r.inventory_id = i.inventory_id AND f.film_id = i.film_id AND r.customer_id = {int(id)} AND return_date IS NOT NULL'
+    cursor.execute(query)
+    result1 = list(cursor.fetchall())
+    query = f'SELECT DISTINCT f.film_id, title, rating, description, rental_date FROM inventory AS i,\
+    rental AS r, film as f WHERE r.inventory_id = i.inventory_id AND f.film_id = i.film_id AND r.customer_id = {int(id)}\
+    AND return_date IS NULL'
+    cursor.execute(query)
+    result2 = list(cursor.fetchall())
+    result = [result1, result2]
+    res = dumps(result, default=str)
+    parsed = loads(res)
     cursor.close()
     return parsed
 
@@ -193,14 +228,7 @@ def handle_add_form():
     first_name, last_name = data.get("first_name").upper(), data.get("last_name").upper()
     email = data.get("email")
     store_id = data.get("store")
-    address_id = 0
-    if len(data.get("address")) > 0:
-        query = f'SELECT address_id FROM address WHERE address LIKE \'{data.get("address")}\''
-        cursor.execute(query)
-        result = cursor.fetchall()
-        if len(result) == 0:
-            return "Invalid Address"
-        address_id = result[0][0]
+    address_id = add_address(data)
     query = f'INSERT INTO customer\
         (customer_id, store_id, first_name, last_name, email, address_id, active, create_date, last_update)\
         VALUES ({id}, {store_id}, \'{first_name}\', \'{last_name}\', \'{email}\', {address_id}, 1, \'{time}\', \'{time}\')'
@@ -208,6 +236,103 @@ def handle_add_form():
     cursor.execute('COMMIT')
     cursor.close()
     return data
+
+def add_city(data):
+    cursor = mysql.connection.cursor()
+    city_id = 0
+    city = data.get("city")
+    query = f'SELECT city_id FROM city WHERE city LIKE \'{city}\''
+    cursor.execute(query)
+    result = cursor.fetchall()
+    if len(result) > 0:
+        city_id = result[0][0]
+    else:
+        seed = 0
+        city_id = int(random.random()*math.pow(2,16))
+        while True:
+            query = f'SELECT city_id FROM city WHERE city_id={city_id}'
+            cursor.execute(query)
+            result = cursor.fetchall()
+            if len(result) == 0:
+                break
+            seed += 1
+            random.seed(seed)
+            city_id = int(random.random()*math.pow(2,16))
+
+        country = data.get("country")
+        country_id = 0
+        query = f'SELECT country_id FROM country WHERE country LIKE \'{country}\''
+        cursor.execute(query)
+        result = cursor.fetchall()
+        if(len(result) > 0):
+            country_id = result[0][0]
+        else:
+            seed = 0
+            country_id = int(random.random()*math.pow(2,16))
+            while True:
+                query = f'SELECT country_id FROM country WHERE country_id={country_id}'
+                cursor.execute(query)
+                result = cursor.fetchall()
+                if len(result) == 0:
+                    break
+                seed += 1
+                random.seed(seed)
+                country_id = int(random.random()*math.pow(2,16))
+            time = datetime.now()
+            query = f'INSERT INTO country (country_id, country, last_update) VALUES ({country_id}, \'{country}\', \'{time}\')'
+            cursor.execute(query)
+            cursor.execute('COMMIT')
+        time = datetime.now()
+        query = f'INSERT INTO city (city_id, city, country_id, last_update) VALUES ({city_id}, \'{city}\', {country_id}, \'{time}\')'
+        cursor.execute(query)
+        cursor.execute('COMMIT')
+    return city_id
+
+def add_address(data):
+    address_id = 0
+    cursor = mysql.connection.cursor()
+    address = data.get("address")
+    query = f'SELECT address_id, city_id FROM address WHERE address LIKE \'{address}\''
+    cursor.execute(query)
+    result = cursor.fetchall()
+    if len(result) > 0:
+        address_id=result[0][0]
+        query = f'SELECT city_id, country_id FROM city WHERE city LIKE \'{data.get("city")}\' AND city_id = {result[0][1]}'
+        cursor.execute(query)
+        result = cursor.fetchall()
+        if(len(result) > 0):
+            query = f'SELECT country_id FROM country WHERE country LIKE \'{data.get("country")}\' AND country_id = {result[0][1]}'
+            cursor.execute(query)
+            result = cursor.fetchall()
+            if(len(result)>0):
+                return address_id
+    seed = 0
+    address_id = int(random.random()*math.pow(2,16))
+    while True:
+        query = f'SELECT address_id FROM address WHERE address_id={address_id}'
+        cursor.execute(query)
+        result = cursor.fetchall()
+        if len(result) == 0:
+            break
+        seed += 1
+        random.seed(seed)
+        address_id = int(random.random()*math.pow(2,16))
+    city_id = add_city(data)
+    postal = data.get("postal")
+    query = ''
+    time = datetime.now()
+    location = 'POINT(0 0)'
+    if(len(postal)==0):
+        query = f'INSERT INTO address (address_id, address, district, city_id, phone, location, last_update)\
+        VALUES ({address_id}, \'{address}\', \'{data.get("district")}\', {city_id}, {data.get("phone")},\
+        ST_GeomFromText(\'{location}\'), \'{time}\')'
+    else:
+        query = f'INSERT INTO address (address_id, address, district, city_id, postal_code, phone, location, last_update)\
+        VALUES ({address_id}, \'{address}\', \'{data.get("district")}\', {city_id}, {postal}, {data.get("phone")},\
+        ST_GeomFromText(\'{location}\'), \'{time}\')'
+    cursor.execute(query)
+    cursor.execute('COMMIT')
+    return address_id
 
 @app.post("/movie/rent")
 def handle_movie_rent():
@@ -244,33 +369,34 @@ def handle_movie_rent():
     cursor.close()
     return data
 
+@app.patch("/return/movie")
+def handle_remove_movie_rent():
+    cursor = mysql.connection.cursor()
+    data = request.json
+    customer_id=data.get("customer_id")
+    film_id=data.get("film_id")
+    time = datetime.now()
+    query = f'SELECT inventory_id FROM inventory WHERE film_id = {film_id}'
+    cursor.execute(query)
+    result = cursor.fetchall()
+    inventory_id = result[0][0]
+    query = f'UPDATE rental SET last_update=\'{time}\', return_date=\'{time}\' WHERE inventory_id={inventory_id}\
+    AND customer_id = {customer_id}'
+    cursor.execute(query)
+    cursor.execute('COMMIT')
+    cursor.close()
+    return data
+
 @app.patch("/customer/edit")
 def handle_edit_form():
     cursor = mysql.connection.cursor()
     time = datetime.now()
     data = request.json
-    address_str= ''
-    store_id = f'store_id={data.get("store")}'
-    activity = f'active={data.get("active")}'
-    first_name = '' if data.get("first_name") == None else data.get("first_name")
-    last_name = '' if data.get("last_name") == None else data.get("last_name")
-    email = '' if data.get("email") == None else data.get("email")
-
-    first_name_str = f', first_name=\'{first_name.upper()}\'' if (len(first_name) > 0) else ''
-    last_name_str = f', last_name=\'{last_name.upper()}\'' if(len(last_name) > 0) else ''
-    email_str = f', email=\'{email}\'' if len(email) > 0 else ''
-
-    if len('' if data.get("address") == None else data.get("address")) > 0:
-        query = f'SELECT address_id FROM address WHERE address LIKE \'{data.get("address")}\''
-        cursor.execute(query)
-        result = cursor.fetchall()
-        if len(result) == 0:
-            return "Invalid Address"
-        address_str = f', address_id={result[0][0]}'
-
+    address = add_address(data)
     query = f'UPDATE customer\
-        SET last_update=\'{time}\', {store_id}, {activity}{first_name_str}{last_name_str}{email_str}{address_str}\
-        WHERE customer_id={data.get("id")}'
+        SET last_update=\'{time}\', store_id={data.get("store")}, active={data.get("active")},\
+        first_name=\'{data.get("first_name").upper()}\', last_name=\'{data.get("last_name").upper()}\',\
+        email=\'{data.get("email")}\', address_id={address} WHERE customer_id={data.get("id")}'
     cursor.execute(query)
     cursor.execute('COMMIT')
     cursor.close()
@@ -279,6 +405,9 @@ def handle_edit_form():
 @app.delete("/customer/remove/<id>")
 def handle_remove_customer(id):
     cursor = mysql.connection.cursor()
+    query = f'DELETE FROM rental WHERE customer_id ={id}'
+    cursor.execute(query)
+    cursor.execute('COMMIT')
     query = f'DELETE FROM customer WHERE customer_id={id}'
     cursor.execute(query)
     cursor.execute('COMMIT')
