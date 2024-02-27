@@ -448,8 +448,10 @@ def edit_address(data):
         else:city_id = add_city(data)
     else:city_id = add_city(data)
     district = data.get("district")
-    query = f'SELECT address_id FROM address WHERE postal_code LIKE \'{postal}\' AND phone LIKE \'{phone}\' AND address LIKE \'{address}\'\
-        AND city_id={city_id} AND district LIKE\'{district}\'' if(len(postal)>0) else f'SELECT address_id FROM address WHERE  phone LIKE \'{phone}\' AND address LIKE \'{address}\'\
+    query = f'SELECT address_id FROM address WHERE postal_code LIKE \'{postal}\'\
+        AND phone LIKE \'{phone}\' AND address LIKE \'{address}\'\
+        AND city_id={city_id} AND district LIKE\'{district}\'' if(len(postal)>0) else f'SELECT address_id\
+        FROM address WHERE  phone LIKE \'{phone}\' AND address LIKE \'{address}\'\
         AND city_id={city_id} AND district LIKE\''
     cursor.execute(query)
     result = cursor.fetchall()
