@@ -301,8 +301,13 @@ def add_address(data):
     cursor = mysql.connection.cursor()
     postal = data.get("postal")
     address = data.get("address")
+    district = data.get("district")
+    city = data.get("city")
+    country = data.get("country")
     if(len(postal)>0):
-        query = f'SELECT address_id FROM address WHERE postal_code LIKE \'{postal}\' AND address NOT LIKE \'{address}\''
+        query = f'SELECT address_id FROM address WHERE postal_code LIKE \'{postal}\' AND address NOT LIKE \'{address}\'\
+        AND district NOT LIKE \'{district}\' AND city_id NOT IN (SELECT city_id FROM city AS c, country AS co WHERE\
+        c.country_id = co.country_id AND city LIKE \'{city}\' AND country LIKE \'{country}\')'
         cursor.execute(query)
         result = cursor.fetchall()
         if len(result) > 0:
@@ -314,21 +319,32 @@ def add_address(data):
     result = cursor.fetchall()
     if len(result) > 0:
         return "invalid phone"
-
-    query = f'SELECT address_id, city_id FROM address WHERE address LIKE \'{address}\''
+    
     cursor.execute(query)
     result = cursor.fetchall()
     if len(result) > 0:
+        return "invalid phone"
+
+    query = f'SELECT address_id, city_id FROM address WHERE address LIKE \'{address}\''
+    cursor.execute(query)
+    city_id=0
+    result = cursor.fetchall()
+    if len(result) > 0:
         address_id=result[0][0]
-        query = f'SELECT city_id, country_id FROM city WHERE city LIKE \'{data.get("city")}\' AND city_id = {result[0][1]}'
+        city_id = result[0][1]
+        query = f'SELECT address_id FROM address WHERE phone LIKE \'{phone}\''
         cursor.execute(query)
         result = cursor.fetchall()
-        if(len(result) > 0):
-            query = f'SELECT country_id FROM country WHERE country LIKE \'{data.get("country")}\' AND country_id = {result[0][1]}'
+        if(len(result) > 0 and result[0][0] == address_id):
+            query = f'SELECT city_id, country_id FROM city WHERE city LIKE \'{city}\' AND city_id = {result[0][1]}'
             cursor.execute(query)
             result = cursor.fetchall()
-            if(len(result)>0):
-                return address_id
+            if(len(result) > 0):
+                query = f'SELECT country_id FROM country WHERE country LIKE \'{country}\' AND country_id = {result[0][1]}'
+                cursor.execute(query)
+                result = cursor.fetchall()
+                if(len(result)>0):
+                    return address_id
     seed = 0
     address_id = int(random.random()*math.pow(2,16))
     while True:
@@ -344,14 +360,15 @@ def add_address(data):
     query = ''
     time = datetime.now()
     location = 'POINT(0 0)'
+    
     if(len(postal)==0):
-        query = f'INSERT INTO address (address_id, address, district, city_id, phone, location, last_update)\
-        VALUES ({address_id}, \'{address}\', \'{data.get("district")}\', {city_id}, {phone},\
-        ST_GeomFromText(\'{location}\'), \'{time}\')'
-    else:
-        query = f'INSERT INTO address (address_id, address, district, city_id, postal_code, phone, location, last_update)\
-        VALUES ({address_id}, \'{address}\', \'{data.get("district")}\', {city_id}, {postal}, {phone},\
-        ST_GeomFromText(\'{location}\'), \'{time}\')'
+        query = f'SELECT postal_code FROM address WHERE address LIKE \'{address}\' AND city_id={city_id} AND district LIKE \'{district}\''
+        cursor.execute(query)
+        result = cursor.fetchall()
+        postal = result[0][0]
+    query = f'INSERT INTO address (address_id, address, district, city_id, postal_code, phone, location, last_update)\
+    VALUES ({address_id}, \'{address}\', \'{district}\', {city_id}, {postal}, {phone},\
+    ST_GeomFromText(\'{location}\'), \'{time}\')'
     cursor.execute(query)
     cursor.execute('COMMIT')
     return address_id
@@ -462,12 +479,11 @@ def edit_address(data):
     if len(result) > 0:
         return result[0][0]
     time = datetime.now()
-    if(len(postal)==0):
-        query = f'UPDATE address SET address=\'{address}\', district=\'{district}\',\
-        city_id={city_id}, phone=\'{phone}\', last_update=\'{time}\' WHERE address_id={address_id}'
-    else:
-        query = f'UPDATE address SET address=\'{address}\', district=\'{data.get("district")}\',\
-        city_id={city_id}, postal_code=\'{postal}\', phone=\'{phone}\', last_update=\'{time}\' WHERE address_id={address_id}'
+    query = f'UPDATE address SET address=\'{address}\', district=\'{district}\',\
+    city_id={city_id}, phone=\'{phone}\', last_update=\'{time}\' WHERE address_id={address_id}'
+    if(len(postal)>0):
+        query = f'UPDATE address SET postal_code=\'{postal}\' WHERE address LIKE \'{address}\'\
+        AND city_id={city_id} AND district=\'{data.get("district")}\''
     cursor.execute(query)
     cursor.execute('COMMIT')
     return address_id
