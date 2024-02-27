@@ -301,7 +301,7 @@ def add_address(data):
     cursor = mysql.connection.cursor()
     postal = data.get("postal")
     address = data.get("address")
-    query = f'SELECT address_id FROM address WHERE postal_code LIKE \'{postal}\' AND address LIKE \'{address}\''
+    query = f'SELECT address_id FROM address WHERE postal_code LIKE \'{postal}\' AND address NOT LIKE \'{address}\''
     cursor.execute(query)
     result = cursor.fetchall()
     if len(result) > 0:
@@ -409,25 +409,92 @@ def handle_remove_movie_rent():
     cursor.close()
     return data
 
+def edit_address(data):
+    address_id = 0
+    cursor = mysql.connection.cursor()
+    postal = data.get("postal")
+    address = data.get("address")
+    query = f'SELECT address_id FROM address WHERE postal_code LIKE \'{postal}\' AND address NOT LIKE \'{address}\''
+    cursor.execute(query)
+    result = cursor.fetchall()
+    if len(result) > 0:
+        return "invalid postal"
+    
+    phone = data.get("phone")
+    query = f'SELECT address_id FROM address WHERE phone LIKE \'{phone}\' AND address NOT LIKE \'{address}\''
+    cursor.execute(query)
+    result = cursor.fetchall()
+    if len(result) > 0:
+        return "invalid phone"
+
+    query = f'SELECT address_id, city_id FROM address WHERE address LIKE \'{address}\''
+    cursor.execute(query)
+    result = cursor.fetchall()
+    city_id = 0
+    if len(result) > 0:
+        city_id = result[0][1]
+        address_id=result[0][0]
+        query = f'SELECT city_id, country_id FROM city WHERE city LIKE \'{data.get("city")}\' AND city_id = {result[0][1]}'
+        cursor.execute(query)
+        result = cursor.fetchall()
+        if(len(result) > 0):
+            query = f'SELECT country_id FROM country WHERE country LIKE \'{data.get("country")}\' AND country_id = {result[0][1]}'
+            cursor.execute(query)
+            result = cursor.fetchall()
+            if(len(result) == 0):
+                city_id = add_city(data)
+        else:city_id = add_city(data)
+    else:city_id = add_city(data)
+    district = data.get("district")
+    query = f'SELECT address_id FROM address WHERE postal_code LIKE \'{postal}\' AND phone LIKE \'{phone}\' AND address LIKE \'{address}\'\
+    AND city_id={city_id} AND district LIKE\'{district}\''
+    cursor.execute(query)
+    result = cursor.fetchall()
+    if len(result) > 0:
+        return result[0][0]
+    time = datetime.now()
+    if(len(postal)==0):
+        query = f'UPDATE address SET address=\'{address}\', district=\'{district}\',\
+        city_id={city_id}, phone=\'{phone}\', last_update=\'{time}\' WHERE address_id={address_id}'
+    else:
+        query = f'UPDATE address SET address=\'{address}\', district=\'{data.get("district")}\',\
+        city_id={city_id}, postal_code=\'{postal}\', phone=\'{phone}\', last_update=\'{time}\' WHERE address_id={address_id}'
+    cursor.execute(query)
+    cursor.execute('COMMIT')
+    return address_id
+
 @app.patch("/customer/edit")
 def handle_edit_form():
     cursor = mysql.connection.cursor()
     data = request.json
+    id = data.get("id")
     email = data.get("email")
-    regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
-    if(not re.fullmatch(regex, email)):
-        return "invalid email"
-    query = f'SELECT customer_id FROM customer WHERE email LIKE {email}'
+    query = f'SELECT customer_id FROM customer WHERE email LIKE \'{email}\''
     cursor.execute(query)
     result = cursor.fetchall()
-    if len(result) > 0:
+    if len(result) > 0 and result[0][0] != id:
         return "same email"
     time = datetime.now()
-    address = add_address(data)
+    first_name, last_name, store_id = data.get("first_name").upper(), data.get("last_name").upper(), data.get("store")
+    active = data.get("active")
+    address = edit_address(data)
+    query = f'SELECT customer_id FROM customer WHERE\
+        store_id={store_id} AND active={active} AND\
+        first_name LIKE \'{first_name}\' AND last_name LIKE\'{last_name}\' AND\
+        email LIKE \'{email}\' AND address_id={address}'
+    cursor.execute(query)
+    if len(result) > 0 and result[0][0] == id:
+        query = f'SELECT * FROM address where address_id={address}'
+        cursor.execute(query)
+        result = cursor.fetchall()
+        res = dumps(result, default=str)
+        parsed = loads(res)
+        cursor.close()
+        return parsed
     query = f'UPDATE customer\
-        SET last_update=\'{time}\', store_id={data.get("store")}, active={data.get("active")},\
-        first_name=\'{data.get("first_name").upper()}\', last_name=\'{data.get("last_name").upper()}\',\
-        email=\'{email}\', address_id={address} WHERE customer_id={data.get("id")}'
+        SET last_update=\'{time}\', store_id={store_id}, active={active},\
+        first_name=\'{first_name}\', last_name=\'{last_name}\',\
+        email=\'{email}\', address_id=\'{address}\' WHERE customer_id={id}'
     cursor.execute(query)
     cursor.execute('COMMIT')
     cursor.close()
