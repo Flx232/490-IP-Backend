@@ -439,7 +439,7 @@ def handle_remove_customer(id):
     query = f'SELECT COUNT(inventory_id) as DVDs\
         FROM rental WHERE customer_id = {id} AND return_date IS NULL'
     cursor.execute(query)
-    result = cursor.fetchall()
+    result = list(cursor.fetchall())
     if(result[0][0] == 0):
         query = f'DELETE FROM rental WHERE customer_id ={id}'
         cursor.execute(query)
@@ -450,7 +450,7 @@ def handle_remove_customer(id):
         cursor.close()
         return id
     cursor.close()
-    return "Invalid"
+    return "invalid"
 
 if __name__ == '__main__':
     app.run(debug=True, port=8000)
