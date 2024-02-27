@@ -452,11 +452,11 @@ def edit_address(data):
         AND phone LIKE \'{phone}\' AND address LIKE \'{address}\'\
         AND city_id={city_id} AND district LIKE\'{district}\'' if(len(postal)>0) else f'SELECT address_id\
         FROM address WHERE  phone LIKE \'{phone}\' AND address LIKE \'{address}\'\
-        AND city_id={city_id} AND district LIKE\'' if(len(postal)>0) else f'SELECT address_id FROM address WHERE\
+        AND city_id={city_id}' if(len(postal)>0) else f'SELECT address_id FROM address WHERE\
         phone LIKE \'{phone}\' AND address LIKE \'{address}\'\
         AND city_id={city_id} AND district LIKE\'{district}\'' if(len(postal)>0) else f'SELECT address_id\
         FROM address WHERE  phone LIKE \'{phone}\' AND address LIKE \'{address}\'\
-        AND city_id={city_id} AND district LIKE\''
+        AND city_id={city_id}'
     cursor.execute(query)
     result = cursor.fetchall()
     if len(result) > 0:
