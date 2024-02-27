@@ -122,7 +122,7 @@ def get_movie_by_title():
         FROM film AS f JOIN film_actor AS fa ON f.film_id = fa.film_id\
         JOIN actor AS a ON fa.actor_id = a.actor_id\
         JOIN film_category as fc ON f.film_id = fc.film_id\
-        JOIN category AS c on fc.category_id = c.category_id\
+        JOIN category AS c on fc.category_id = c.category_id JOIN inventory AS i ON f.film_id = i.film_id\
         WHERE title LIKE \'{title}%\'\
         AND first_name LIKE \'{first}%\' AND last_name LIKE \'{last}%\'\
         AND name LIKE \'{genre}%\''
