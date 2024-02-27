@@ -301,11 +301,12 @@ def add_address(data):
     cursor = mysql.connection.cursor()
     postal = data.get("postal")
     address = data.get("address")
-    query = f'SELECT address_id FROM address WHERE postal_code LIKE \'{postal}\' AND address NOT LIKE \'{address}\''
-    cursor.execute(query)
-    result = cursor.fetchall()
-    if len(result) > 0:
-        return "invalid postal"
+    if(len(postal)>0):
+        query = f'SELECT address_id FROM address WHERE postal_code LIKE \'{postal}\' AND address NOT LIKE \'{address}\''
+        cursor.execute(query)
+        result = cursor.fetchall()
+        if len(result) > 0:
+            return "invalid postal"
     
     phone = data.get("phone")
     query = f'SELECT address_id FROM address WHERE phone LIKE \'{phone}\' AND address NOT LIKE \'{address}\''
@@ -414,11 +415,12 @@ def edit_address(data):
     cursor = mysql.connection.cursor()
     postal = data.get("postal")
     address = data.get("address")
-    query = f'SELECT address_id FROM address WHERE postal_code LIKE \'{postal}\' AND address NOT LIKE \'{address}\''
-    cursor.execute(query)
-    result = cursor.fetchall()
-    if len(result) > 0:
-        return "invalid postal"
+    if(len(postal)>0):
+        query = f'SELECT address_id FROM address WHERE postal_code LIKE \'{postal}\' AND address NOT LIKE \'{address}\''
+        cursor.execute(query)
+        result = cursor.fetchall()
+        if len(result) > 0:
+            return "invalid postal"
     
     phone = data.get("phone")
     query = f'SELECT address_id FROM address WHERE phone LIKE \'{phone}\' AND address NOT LIKE \'{address}\''
@@ -447,7 +449,8 @@ def edit_address(data):
     else:city_id = add_city(data)
     district = data.get("district")
     query = f'SELECT address_id FROM address WHERE postal_code LIKE \'{postal}\' AND phone LIKE \'{phone}\' AND address LIKE \'{address}\'\
-    AND city_id={city_id} AND district LIKE\'{district}\''
+        AND city_id={city_id} AND district LIKE\'{district}\'' if(len(postal)>0) else f'SELECT address_id FROM address WHERE  phone LIKE \'{phone}\' AND address LIKE \'{address}\'\
+        AND city_id={city_id} AND district LIKE\''
     cursor.execute(query)
     result = cursor.fetchall()
     if len(result) > 0:
