@@ -5,6 +5,7 @@ from json import loads, dumps
 from datetime import datetime
 import random
 import math
+import re
 
 port = 8000
 app = Flask(__name__)
@@ -211,6 +212,13 @@ def get_rent_hist(id):
 @app.post("/customer/add")
 def handle_add_form():
     cursor = mysql.connection.cursor()
+    data = request.json
+    email = data.get("email")
+    query = f'SELECT customer_id FROM customer WHERE email LIKE \'{email}\''
+    cursor.execute(query)
+    result = cursor.fetchall()
+    if len(result) > 0:
+        return "same email"
     seed = 0
     random.seed(seed)
     id = int(random.random()*math.pow(2,16))
@@ -224,11 +232,11 @@ def handle_add_form():
         random.seed(seed)
         id = int(random.random()*math.pow(2,16))
     time = datetime.now()
-    data = request.json
     first_name, last_name = data.get("first_name").upper(), data.get("last_name").upper()
-    email = data.get("email")
     store_id = data.get("store")
     address_id = add_address(data)
+    if(address_id == "invalid postal"): return "invalid postal"
+    if(address_id == "invalid phone"): return "invalid phone"
     query = f'INSERT INTO customer\
         (customer_id, store_id, first_name, last_name, email, address_id, active, create_date, last_update)\
         VALUES ({id}, {store_id}, \'{first_name}\', \'{last_name}\', \'{email}\', {address_id}, 1, \'{time}\', \'{time}\')'
@@ -291,7 +299,21 @@ def add_city(data):
 def add_address(data):
     address_id = 0
     cursor = mysql.connection.cursor()
+    postal = data.get("postal")
     address = data.get("address")
+    query = f'SELECT address_id FROM address WHERE postal_code LIKE \'{postal}\' AND address LIKE \'{address}\''
+    cursor.execute(query)
+    result = cursor.fetchall()
+    if len(result) > 0:
+        return "invalid postal"
+    
+    phone = data.get("phone")
+    query = f'SELECT address_id FROM address WHERE phone LIKE \'{phone}\' AND address NOT LIKE \'{address}\''
+    cursor.execute(query)
+    result = cursor.fetchall()
+    if len(result) > 0:
+        return "invalid phone"
+
     query = f'SELECT address_id, city_id FROM address WHERE address LIKE \'{address}\''
     cursor.execute(query)
     result = cursor.fetchall()
@@ -318,17 +340,16 @@ def add_address(data):
         random.seed(seed)
         address_id = int(random.random()*math.pow(2,16))
     city_id = add_city(data)
-    postal = data.get("postal")
     query = ''
     time = datetime.now()
     location = 'POINT(0 0)'
     if(len(postal)==0):
         query = f'INSERT INTO address (address_id, address, district, city_id, phone, location, last_update)\
-        VALUES ({address_id}, \'{address}\', \'{data.get("district")}\', {city_id}, {data.get("phone")},\
+        VALUES ({address_id}, \'{address}\', \'{data.get("district")}\', {city_id}, {phone},\
         ST_GeomFromText(\'{location}\'), \'{time}\')'
     else:
         query = f'INSERT INTO address (address_id, address, district, city_id, postal_code, phone, location, last_update)\
-        VALUES ({address_id}, \'{address}\', \'{data.get("district")}\', {city_id}, {postal}, {data.get("phone")},\
+        VALUES ({address_id}, \'{address}\', \'{data.get("district")}\', {city_id}, {postal}, {phone},\
         ST_GeomFromText(\'{location}\'), \'{time}\')'
     cursor.execute(query)
     cursor.execute('COMMIT')
@@ -390,13 +411,22 @@ def handle_remove_movie_rent():
 @app.patch("/customer/edit")
 def handle_edit_form():
     cursor = mysql.connection.cursor()
-    time = datetime.now()
     data = request.json
+    email = data.get("email")
+    regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
+    if(not re.fullmatch(regex, email)):
+        return "invalid email"
+    query = f'SELECT customer_id FROM customer WHERE email LIKE {email}'
+    cursor.execute(query)
+    result = cursor.fetchall()
+    if len(result) > 0:
+        return "same email"
+    time = datetime.now()
     address = add_address(data)
     query = f'UPDATE customer\
         SET last_update=\'{time}\', store_id={data.get("store")}, active={data.get("active")},\
         first_name=\'{data.get("first_name").upper()}\', last_name=\'{data.get("last_name").upper()}\',\
-        email=\'{data.get("email")}\', address_id={address} WHERE customer_id={data.get("id")}'
+        email=\'{email}\', address_id={address} WHERE customer_id={data.get("id")}'
     cursor.execute(query)
     cursor.execute('COMMIT')
     cursor.close()
@@ -405,14 +435,21 @@ def handle_edit_form():
 @app.delete("/customer/remove/<id>")
 def handle_remove_customer(id):
     cursor = mysql.connection.cursor()
-    query = f'DELETE FROM rental WHERE customer_id ={id}'
+    query = f'SELECT COUNT(inventory_id) as DVDs\
+        FROM rental WHERE customer_id = {id} AND return_date IS NULL'
     cursor.execute(query)
-    cursor.execute('COMMIT')
-    query = f'DELETE FROM customer WHERE customer_id={id}'
-    cursor.execute(query)
-    cursor.execute('COMMIT')
+    result = cursor.fetchall()
+    if(result[0][0] == 0):
+        query = f'DELETE FROM rental WHERE customer_id ={id}'
+        cursor.execute(query)
+        cursor.execute('COMMIT')
+        query = f'DELETE FROM customer WHERE customer_id={id}'
+        cursor.execute(query)
+        cursor.execute('COMMIT')
+        cursor.close()
+        return id
     cursor.close()
-    return id
+    return "Invalid"
 
 if __name__ == '__main__':
     app.run(debug=True, port=8000)
