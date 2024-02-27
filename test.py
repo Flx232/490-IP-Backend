@@ -10,13 +10,10 @@ try:
     cnx = mysql.connector.connect(host='localhost', user='root', password='')
     cursor = cnx.cursor(buffered=True)
     cursor.execute('USE sakila')
-    query = f'SELECT location FROM address WHERE address LIKE \'47 MySakila Drive\''
+    query = f'SELECT customer_id FROM customer WHERE email LIKE \"MARY.SMITH@sakilacustomer.org\"'
     cursor.execute(query)
     result = cursor.fetchall()
-    if len(result) > 0:
-        print(result)
-    else:
-        print("hi")
+    print(len(result))
     cursor.close()
 except mysql.connector.Error as err:
     print(err)
