@@ -397,7 +397,8 @@ def handle_remove_movie_rent():
     customer_id=data.get("customer_id")
     film_id=data.get("film_id")
     time = datetime.now()
-    query = f'SELECT inventory_id FROM inventory WHERE film_id = {film_id}'
+    query = f'SELECT r.inventory_id FROM inventory AS i, rental AS r WHERE film_id = {film_id}\
+    AND customer_id = {customer_id} AND return_date IS NULL LIMIT 1'
     cursor.execute(query)
     result = cursor.fetchall()
     inventory_id = result[0][0]
